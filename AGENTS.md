@@ -14,14 +14,15 @@ trimmer potentiometer, a buzzer, and a serial monitor.
 Built for the NSWI170 Computer Systems course at Charles University (Prague).
 Course website: https://teaching.ms.mff.cuni.cz/nswi170-web/pages/labs/
 
-## Current State: POC + Phase 1 Complete
+## Current State: POC + Phase 1 + Phase 2 Complete
 
-- 44/44 tests pass (`node tests.js`)
+- 51/51 tests pass (`node tests.js`)
 - 31/31 health checks pass (`node scripts/verify.js`)
 - All 6 lab examples compile and execute correctly
 - Pure client-side: open `index.html` in browser, no server needed
-- ~3,700 lines across 7 source files
+- ~5,000 lines across 7 source files
 - Phase 1 (bug fixes) is complete — see `tasks/phase1.md`
+- Phase 2 (AST-based transpiler) is complete — see `tasks/phase2.md`
 
 ## How to Work With This Project
 
@@ -44,12 +45,13 @@ python3 -m http.server 8080
 ```
 index.html          — Single-page app, loads all JS via <script> tags
 style.css           — All styling, dark theme, board visualization
-transpiler.js       — C++ → JS source-to-source transpiler (REGEX-BASED — the weak link)
+transpiler.js       — C++ → JS AST-based transpiler (lexer → parser → codegen)
+transpiler-legacy.js — Old regex-based transpiler (archived for reference)
 arduino-api.js      — Arduino function implementations + FunShield hardware state
 emulator.js         — Execution engine: compile → setup() → loop() cycle
 app.js              — UI controller: wires DOM to emulator + hardware callbacks
 examples.js         — 6 example programs (Labs 2-6 + test sample)
-tests.js            — 39-test suite covering transpiler + execution
+tests.js            — 51-test suite covering transpiler + execution
 
 PLAN.md             — Full production plan with 7 phases
 ARCHITECTURE.md     — Detailed internals, data flow, known bugs
@@ -61,11 +63,11 @@ scripts/verify.js   — Health check script (tests + lint + structure)
 
 ```
 User's C++ code
-  → transpiler.js: extract string literals → strip comments
-    → preprocess (#include/#define) → join multiline constructs
-    → line-by-line transform (functions, variables, for-loops)
-    → post-process (integer division, casts, nullptr, operators)
-    → restore string literals
+  → transpiler.js (AST-based, Phase 2):
+    → Preprocess: #include → strip, #define → inline expansion
+    → Tokenize: lexer produces typed token stream
+    → Parse: recursive descent → AST (with error recovery)
+    → Generate: AST → JavaScript (type-aware integer division)
   → emulator.js: wraps transpiled JS in new Function() with Arduino API as params
   → Calls setup() once
   → Calls loop() 200x per requestAnimationFrame
@@ -113,7 +115,7 @@ All 6 bugs from the original audit have been fixed. See `tasks/phase1.md` for de
 | Phase | Summary | Effort | Blocks launch? | Status |
 |-------|---------|--------|----------------|--------|
 | P1 | Fix known bugs | 1-2 days | Yes | **DONE** |
-| P2 | Replace regex transpiler with real parser | 3-5 days | Yes | Next |
+| P2 | Replace regex transpiler with real parser | 3-5 days | Yes | **DONE** |
 | P3 | CodeMirror 6 code editor | 1-2 days | No | Pending |
 | P4 | UI/UX polish (board viz, speed control, errors) | 2-3 days | No | Pending |
 | P5 | Expand tests to 100+, add CI | 2-3 days | Yes | Pending |

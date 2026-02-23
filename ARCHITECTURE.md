@@ -131,29 +131,24 @@ Position byte (one-hot):
 0x08 = digit 3 (leftmost)
 ```
 
-## Transpiler Phases (Current Regex-Based)
+## Transpiler Architecture (Phase 2 — AST-based)
 
-1. **Extract strings** — `"..."` and `'...'` → `__STR_N__` placeholders
-2. **Strip comments** — `//` and `/* */`
-3. **Preprocessor** — `#include` → delete, `#define` → const/function
-4. **Join multiline** — detect `= {` not closed on same line, join until `}`
-5. **Line-by-line transform** — regex match each line against patterns:
-   - Function definitions → `function name(params) {`
-   - Variable declarations → `let`/`const name = value;`
-   - For loops → strip type in init section
-   - Forward declarations → comment out
-   - Class/struct → `class Name {`
-6. **Post-process** — integer division wrapping, casts, operators, suffixes
-7. **Restore strings** — `__STR_N__` → original literals
+The transpiler uses a 4-stage pipeline:
 
-### Why This Must Be Replaced (Phase 2)
+1. **Preprocess** — `#include` → strip, `#define` → inline expansion (both simple and function-like macros)
+2. **Tokenize** — lexer produces typed token stream with line/col tracking. Handles: all C operators, string/char literals with escapes, hex/binary/decimal/float numbers, integer suffix stripping, comment removal, Arduino B-prefix binary literals
+3. **Parse** — recursive descent parser produces AST. 15-level expression precedence. Handles: declarations, functions, structs, all control flow (if/for/while/do-while/switch), C-style casts, sizeof. Error recovery with line numbers
+4. **Generate** — AST → JavaScript. Scope-based type tracker for integer division detection. Struct → ES6 class. Cast → Math.trunc/pass-through. sizeof(type) → AVR size table lookup
 
-The line-by-line approach cannot handle:
-- `(a + b) / c` — division regex only matches `word / word`
-- Multiple statements on one line
-- Type inference for integer vs float division
-- Nested/complex expressions
+### Key improvements over v1 (regex-based):
+- Handles `(a + b) / c` — any complex expression
+- Multiple statements per line
+- Type-aware integer division (float vs int)
+- Proper C-style cast handling
 - Accurate error messages with line numbers
+- Struct methods with `this.` member access
+
+The old regex transpiler is archived as `transpiler-legacy.js` for reference.
 
 ## Timing Model
 
