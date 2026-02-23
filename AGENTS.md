@@ -7,22 +7,24 @@
 ## What This Is
 
 A browser-based emulator for Arduino Uno + FunShield shield. Users write
-Arduino C++ in an editor, click "Compile & Upload", and see the hardware
-respond visually: 4 LEDs, 3 buttons, a 4-digit 7-segment display, a
-trimmer potentiometer, a buzzer, and a serial monitor.
+Arduino C++ in a CodeMirror 6 editor, click "Compile & Upload", and see the
+hardware respond visually: 4 LEDs, 3 buttons, a 4-digit 7-segment display,
+a trimmer potentiometer, a buzzer, and a serial monitor.
 
 Built for the NSWI170 Computer Systems course at Charles University (Prague).
 Course website: https://teaching.ms.mff.cuni.cz/nswi170-web/pages/labs/
 
-## Current State: POC + Phase 1 + Phase 2 Complete
+## Current State: Phases 1-6 Complete (Launch Ready)
 
-- 51/51 tests pass (`node tests.js`)
+- 97/97 tests pass (`node tests.js`)
 - 31/31 health checks pass (`node scripts/verify.js`)
 - All 6 lab examples compile and execute correctly
-- Pure client-side: open `index.html` in browser, no server needed
-- ~5,000 lines across 7 source files
-- Phase 1 (bug fixes) is complete — see `tasks/phase1.md`
-- Phase 2 (AST-based transpiler) is complete — see `tasks/phase2.md`
+- Vite build produces optimized `dist/` output (~620KB total, ~185KB gzipped)
+- GitHub Actions CI: tests → build → deploy to GitHub Pages on push to main
+- CodeMirror 6 editor with C++ syntax highlighting and error diagnostics
+- Execution controls: speed slider, pause/resume, step mode, loop counter, millis clock
+- Buzzer visual indicator with animation
+- Mobile responsive layout
 
 ## How to Work With This Project
 
@@ -33,47 +35,76 @@ node tests.js
 # Run full project health check
 node scripts/verify.js
 
-# Serve locally
-python3 -m http.server 8080
-# Then open http://localhost:8080
+# Development server (hot reload)
+npm run dev
 
-# The app is index.html — just open it directly in a browser too
+# Production build
+npm run build
+
+# Preview production build
+npm run preview
+
+# The app also works by opening index.html directly (without CodeMirror)
 ```
 
 ## File Map
 
 ```
-index.html          — Single-page app, loads all JS via <script> tags
-style.css           — All styling, dark theme, board visualization
-transpiler.js       — C++ → JS AST-based transpiler (lexer → parser → codegen)
+index.html           — Single-page app, loads source files via <script> tags
+style.css            — All styling, dark theme, board visualization, responsive
+transpiler.js        — C++ → JS AST-based transpiler (lexer → parser → codegen)
 transpiler-legacy.js — Old regex-based transpiler (archived for reference)
-arduino-api.js      — Arduino function implementations + FunShield hardware state
-emulator.js         — Execution engine: compile → setup() → loop() cycle
-app.js              — UI controller: wires DOM to emulator + hardware callbacks
-examples.js         — 6 example programs (Labs 2-6 + test sample)
-tests.js            — 51-test suite covering transpiler + execution
+arduino-api.js       — Arduino function implementations + FunShield hardware state
+emulator.js          — Execution engine: compile → setup() → loop() cycle
+app.js               — UI controller: wires DOM to emulator + hardware callbacks
+examples.js          — 6 example programs (Labs 2-6 + test sample)
+tests.js             — 97-test suite covering transpiler + execution + API
 
-PLAN.md             — Full production plan with 7 phases
-ARCHITECTURE.md     — Detailed internals, data flow, known bugs
-tasks/              — One file per phase with atomic checklist items
-scripts/verify.js   — Health check script (tests + lint + structure)
+src/
+  editor.js          — CodeMirror 6 integration (syntax highlight, diagnostics)
+  main.js            — Module entry point (loads CodeMirror, injects into App)
+
+.github/workflows/
+  ci.yml             — GitHub Actions: test → build → deploy to Pages
+
+vite.config.js       — Vite build config with custom inline plugin
+package.json         — npm project config and scripts
+scripts/verify.js    — 31-check health check script
+
+PLAN.md              — Full production plan with 7 phases
+ARCHITECTURE.md      — Detailed internals, data flow
+tasks/               — One file per phase with atomic checklist items
 ```
 
 ## Execution Pipeline (How Code Runs)
 
 ```
 User's C++ code
-  → transpiler.js (AST-based, Phase 2):
+  → transpiler.js (AST-based):
     → Preprocess: #include → strip, #define → inline expansion
     → Tokenize: lexer produces typed token stream
     → Parse: recursive descent → AST (with error recovery)
     → Generate: AST → JavaScript (type-aware integer division)
   → emulator.js: wraps transpiled JS in new Function() with Arduino API as params
   → Calls setup() once
-  → Calls loop() 200x per requestAnimationFrame
+  → Calls loop() N times per requestAnimationFrame (N scales with speed setting)
   → Arduino API calls (digitalWrite, shiftOut, etc.) update hardware state
   → Hardware state changes fire callbacks → app.js updates DOM
 ```
+
+## Architecture: Dual-Mode File Loading
+
+The source files (transpiler.js, arduino-api.js, emulator.js, examples.js, app.js) use
+IIFE/global variable patterns. This allows:
+
+- **Browser direct**: Load via `<script>` tags, globals are available
+- **Node.js tests**: `require()` in tests.js (transpiler.js has module.exports)
+- **Vite dev**: Vite serves files as-is, `<script type="module" src="src/main.js">` loads CodeMirror
+- **Vite build**: Custom plugin inlines the IIFE scripts into HTML, Vite bundles the ES module (CodeMirror)
+
+The CodeMirror editor is loaded as an ES module (`src/main.js` → `src/editor.js`).
+It calls `App.setEditor(editorApi)` to inject itself into the app. If CodeMirror
+fails to load (e.g., opening index.html directly without Vite), the textarea fallback works.
 
 ## The FunShield Hardware Model
 
@@ -88,41 +119,31 @@ User's C++ code
 4 LEDs: pins 13,12,11,10 — active LOW (LOW=on, HIGH=off)
 3 Buttons: pins A1,A2,A3 — active LOW (pressed=LOW, released=HIGH)
 Trimmer: pin A0 — analog 0-1023
-Buzzer: pin 3 — active LOW
+Buzzer: pin 3 — active LOW (tone/noTone, visual indicator with frequency display)
 ```
 
-## Known Bugs — ALL FIXED (Phase 1 Complete)
-
-All 6 bugs from the original audit have been fixed. See `tasks/phase1.md` for details.
-
 ## Known Limitations (By Design)
-
-- **Transpiler is regex-based.** Works for lab code patterns but breaks on:
-  multiple statements per line, complex expressions like `(a+b)/c`, templates,
-  lambdas, pointer arithmetic, 2D arrays, typedef, static_cast.
-  → Fix: Phase 2 replaces with tree-sitter-c or hand-written parser.
 
 - **`delay()` is a no-op.** The course prohibits it, so this is intentional.
   Phase 7 (Web Worker) could implement real delay.
 
-- **`new Function()` requires `unsafe-eval` CSP.** Deployment blocker for
-  strict CSP environments. Phase 7 (Web Worker) fixes this.
+- **`new Function()` requires `unsafe-eval` CSP.** GitHub Pages doesn't enforce
+  strict CSP, so this works. Phase 7 (Web Worker) would fix this for strict
+  CSP environments.
 
 - **`randomSeed()` is a no-op.** JS `Math.random()` can't be seeded.
 
 ## Implementation Phases (see tasks/ for details)
 
-| Phase | Summary | Effort | Blocks launch? | Status |
-|-------|---------|--------|----------------|--------|
-| P1 | Fix known bugs | 1-2 days | Yes | **DONE** |
-| P2 | Replace regex transpiler with real parser | 3-5 days | Yes | **DONE** |
-| P3 | CodeMirror 6 code editor | 1-2 days | No | Pending |
-| P4 | UI/UX polish (board viz, speed control, errors) | 2-3 days | No | Pending |
-| P5 | Expand tests to 100+, add CI | 2-3 days | Yes | Pending |
-| P6 | Vite build + deploy to hosting | 1-2 days | Yes | Pending |
-| P7 | Web Worker sandbox, save/share, advanced features | Ongoing | No | Pending |
-
-**Minimum launch = P1 + P2 + P5 + P6 (~8-12 days)**
+| Phase | Summary | Status |
+|-------|---------|--------|
+| P1 | Fix known bugs | **DONE** |
+| P2 | AST-based transpiler (hand-written recursive descent) | **DONE** |
+| P3 | CodeMirror 6 code editor | **DONE** |
+| P4 | UI/UX polish (buzzer viz, speed control, error UX, mobile) | **DONE** |
+| P5 | 97 tests + GitHub Actions CI | **DONE** |
+| P6 | Vite build + GitHub Pages deploy | **DONE** |
+| P7 | Web Worker sandbox, save/share, serial plotter | Pending (post-launch) |
 
 ## Rules for Agents
 
@@ -133,9 +154,10 @@ All 6 bugs from the original audit have been fixed. See `tasks/phase1.md` for de
 5. **Keep this file updated** if you change architecture or add new files.
 6. **The examples in examples.js are integration tests.** All 6 must always
    compile and execute without errors.
-7. **Test in the browser too** — not just Node. Open index.html and try every
+7. **Test in the browser too** — not just Node. Run `npm run dev` and try every
    example manually. The 7-seg display multiplexing is a visual behavior
    that automated tests can't fully verify.
+8. **Run `npm run build`** to verify the production build still works.
 
 ## External References
 

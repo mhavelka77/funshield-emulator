@@ -5,13 +5,28 @@
  * display rendering, serial monitor, and compile/run controls.
  */
 
-(function () {
+const App = (function () {
     'use strict';
+
+    // =========================================================================
+    // Editor Abstraction — CodeMirror or textarea fallback
+    // =========================================================================
+    const textareaEl = document.getElementById('code-editor');
+
+    // Default editor API backed by the textarea
+    let editor = {
+        getValue() { return textareaEl.value; },
+        setValue(code) { textareaEl.value = code; },
+        setErrors(_errors) {},
+        setWarnings(_warnings) {},
+        clearErrors() {},
+        focus() { textareaEl.focus(); },
+    };
 
     // =========================================================================
     // DOM References
     // =========================================================================
-    const codeEditor = document.getElementById('code-editor');
+    const codeEditor = textareaEl; // keep for backward compat (keyboard handler ref)
     const exampleSelect = document.getElementById('example-select');
     const btnCompile = document.getElementById('btn-compile');
     const btnStop = document.getElementById('btn-stop');
@@ -24,6 +39,18 @@
     const serialClear = document.getElementById('serial-clear');
     const trimmer = document.getElementById('trimmer');
     const trimmerValue = document.getElementById('trimmer-value');
+
+    // Execution controls
+    const speedSlider = document.getElementById('speed-slider');
+    const speedValueEl = document.getElementById('speed-value');
+    const btnPause = document.getElementById('btn-pause');
+    const btnStep = document.getElementById('btn-step');
+    const loopCounterEl = document.getElementById('loop-counter');
+    const millisClockEl = document.getElementById('millis-clock');
+
+    // Buzzer indicator
+    const buzzerIndicator = document.getElementById('buzzer-indicator');
+    const buzzerFreqEl = document.getElementById('buzzer-freq');
 
     // LED elements
     const ledEls = [
@@ -76,6 +103,12 @@
         btnStop.disabled = !isRunning;
         btnReset.disabled = !isRunning;
         exampleSelect.disabled = isRunning;
+        if (btnPause) btnPause.disabled = !isRunning;
+        if (btnStep) btnStep.disabled = !isRunning;
+        if (!isRunning && btnPause) {
+            btnPause.textContent = 'Pause';
+            btnPause.classList.remove('paused');
+        }
     }
 
     // =========================================================================
@@ -174,7 +207,17 @@
         };
 
         hw.onBuzzerChange = function (buzzer) {
-            // TODO (Phase 4): Add buzzer visual indicator (speaker icon animation)
+            if (buzzerIndicator) {
+                if (buzzer.active) {
+                    buzzerIndicator.classList.add('active');
+                    if (buzzerFreqEl) {
+                        buzzerFreqEl.textContent = buzzer.frequency ? `${buzzer.frequency}Hz` : '';
+                    }
+                } else {
+                    buzzerIndicator.classList.remove('active');
+                    if (buzzerFreqEl) buzzerFreqEl.textContent = '';
+                }
+            }
         };
 
         hw.serial.onOutput = function (text) {
@@ -193,10 +236,11 @@
         clearCompilerOutput();
         clearSerialOutput();
 
-        const source = codeEditor.value;
+        const source = editor.getValue();
 
         setStatus('Compiling...', '');
         logCompiler('Compiling sketch...', 'info');
+        editor.clearErrors();
 
         // Small delay so UI updates
         setTimeout(() => {
@@ -206,12 +250,16 @@
             for (const w of result.warnings) {
                 logCompiler(`Warning: ${w.message}`, 'warning');
             }
+            if (result.warnings.length > 0) {
+                editor.setWarnings(result.warnings);
+            }
 
             if (!result.success) {
                 // Show errors
                 for (const e of result.errors) {
                     logCompiler(`Error: ${e.message}`, 'error');
                 }
+                editor.setErrors(result.errors);
                 setStatus('Compilation Failed', 'error');
                 updateButtonStates(false);
                 return;
@@ -243,6 +291,9 @@
         setStatus('Stopped', '');
         updateButtonStates(false);
         logCompiler('Program stopped.', 'info');
+        // Clear buzzer indicator
+        if (buzzerIndicator) buzzerIndicator.classList.remove('active');
+        if (buzzerFreqEl) buzzerFreqEl.textContent = '';
     }
 
     function doReset() {
@@ -251,7 +302,7 @@
         clearSerialOutput();
         logCompiler('Resetting...', 'info');
 
-        const source = codeEditor.value;
+        const source = editor.getValue();
         const result = Emulator.reset(source, (errorMsg) => {
             logCompiler(`Runtime Error: ${errorMsg}`, 'error');
             setStatus('Error', 'error');
@@ -300,7 +351,9 @@
 
     document.addEventListener('keydown', (e) => {
         // Don't capture if typing in editor or serial input
+        const editorContainer = document.getElementById('cm-editor-container');
         if (e.target === codeEditor || e.target === serialInput) return;
+        if (editorContainer && editorContainer.contains(e.target)) return;
 
         if (e.key in keyButtonMap && !activeKeys[e.key]) {
             activeKeys[e.key] = true;
@@ -353,7 +406,8 @@
     exampleSelect.addEventListener('change', () => {
         const key = exampleSelect.value;
         if (key && Examples[key]) {
-            codeEditor.value = Examples[key];
+            editor.setValue(Examples[key]);
+            editor.clearErrors();
         }
         exampleSelect.value = '';
     });
@@ -364,6 +418,80 @@
     btnCompile.addEventListener('click', doCompileAndRun);
     btnStop.addEventListener('click', doStop);
     btnReset.addEventListener('click', doReset);
+
+    // =========================================================================
+    // Execution Controls: Speed, Pause, Step, Stats
+    // =========================================================================
+    if (speedSlider) {
+        // Speed slider: value 1-20, maps to 0.05x-2.0x
+        // 10 = 1x (default)
+        function updateSpeed() {
+            const val = parseInt(speedSlider.value);
+            let mult;
+            if (val <= 10) {
+                // 1-10 maps to 0.05-1.0
+                mult = val / 10;
+            } else {
+                // 11-20 maps to 1.0-2.0
+                mult = 1.0 + (val - 10) / 10;
+            }
+            Emulator.setSpeed(mult);
+            if (speedValueEl) {
+                if (mult < 1) {
+                    speedValueEl.textContent = `${mult.toFixed(1)}x`;
+                } else {
+                    speedValueEl.textContent = `${mult.toFixed(1)}x`;
+                }
+            }
+        }
+        speedSlider.addEventListener('input', updateSpeed);
+        updateSpeed(); // set initial
+    }
+
+    if (btnPause) {
+        btnPause.addEventListener('click', () => {
+            if (Emulator.isPaused()) {
+                Emulator.resume();
+                btnPause.textContent = 'Pause';
+                btnPause.classList.remove('paused');
+                setStatus('Running', 'running');
+            } else {
+                Emulator.pause();
+                btnPause.textContent = 'Resume';
+                btnPause.classList.add('paused');
+                setStatus('Paused', 'warning');
+            }
+        });
+    }
+
+    if (btnStep) {
+        btnStep.addEventListener('click', () => {
+            if (!Emulator.isPaused()) {
+                // Auto-pause first
+                Emulator.pause();
+                if (btnPause) {
+                    btnPause.textContent = 'Resume';
+                    btnPause.classList.add('paused');
+                }
+                setStatus('Paused', 'warning');
+            }
+            Emulator.step();
+        });
+    }
+
+    // Stats callback — update loop counter and millis clock
+    Emulator.setStatsCallback(function (loops) {
+        if (loopCounterEl) loopCounterEl.textContent = `Loops: ${loops.toLocaleString()}`;
+        if (millisClockEl) {
+            const hw = ArduinoAPI.getState();
+            const ms = Math.floor(performance.now() - hw.startTime);
+            if (ms >= 1000) {
+                millisClockEl.textContent = `Time: ${(ms / 1000).toFixed(1)}s`;
+            } else {
+                millisClockEl.textContent = `Time: ${Math.round(ms)}ms`;
+            }
+        }
+    });
 
     // Keyboard shortcut: Ctrl+Enter to compile and run
     document.addEventListener('keydown', (e) => {
@@ -380,17 +508,19 @@
     });
 
     // =========================================================================
-    // Tab key support in editor
+    // Tab key support in editor (textarea fallback only)
     // =========================================================================
-    codeEditor.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            const start = codeEditor.selectionStart;
-            const end = codeEditor.selectionEnd;
-            codeEditor.value = codeEditor.value.substring(0, start) + '  ' + codeEditor.value.substring(end);
-            codeEditor.selectionStart = codeEditor.selectionEnd = start + 2;
-        }
-    });
+    if (textareaEl && textareaEl.style.display !== 'none') {
+        textareaEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = textareaEl.selectionStart;
+                const end = textareaEl.selectionEnd;
+                textareaEl.value = textareaEl.value.substring(0, start) + '  ' + textareaEl.value.substring(end);
+                textareaEl.selectionStart = textareaEl.selectionEnd = start + 2;
+            }
+        });
+    }
 
     // =========================================================================
     // Button setup
@@ -407,5 +537,20 @@
     logCompiler('Arduino + FunShield Emulator ready.', 'info');
     logCompiler('Press "Compile & Upload" or Ctrl+Enter to run your code.', 'info');
     logCompiler('Use keys 1, 2, 3 to press FunShield buttons (when not typing in editor).', 'info');
+
+    // =========================================================================
+    // Public API for CodeMirror integration
+    // =========================================================================
+    return {
+        /**
+         * Replace the default textarea editor with a custom editor API.
+         * The editor object must have: getValue(), setValue(code), setErrors(arr),
+         * setWarnings(arr), clearErrors(), focus()
+         */
+        setEditor(editorApi) {
+            editor = editorApi;
+        },
+        compile: doCompileAndRun,
+    };
 
 })();

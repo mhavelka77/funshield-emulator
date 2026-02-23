@@ -182,6 +182,23 @@ header h1 {
     background: #264f78;
 }
 
+/* CodeMirror editor container — replaces textarea when available */
+#cm-editor-container {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+#cm-editor-container .cm-editor {
+    flex: 1;
+    overflow: hidden;
+}
+
+#cm-editor-container .cm-scroller {
+    overflow: auto;
+}
+
 /* =========================================================================
    Hardware Panel
    ========================================================================= */
@@ -530,6 +547,162 @@ header h1 {
 }
 
 /* =========================================================================
+   Buzzer Indicator
+   ========================================================================= */
+
+#buzzer-section {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0;
+}
+
+#buzzer-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#buzzer-icon {
+    transition: filter 0.05s;
+}
+
+#buzzer-indicator.active #buzzer-icon circle:first-child {
+    fill: #ff9800;
+    stroke: #ffb74d;
+    filter: drop-shadow(0 0 6px #ff9800);
+}
+
+#buzzer-indicator.active #buzzer-icon circle:last-child {
+    fill: #ffcc80;
+}
+
+#buzzer-label {
+    font-size: 11px;
+    color: #aaa;
+}
+
+#buzzer-freq {
+    font-size: 11px;
+    color: #ff9800;
+    font-family: monospace;
+    min-width: 50px;
+}
+
+/* Buzzer pulse animation when active */
+@keyframes buzzer-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+#buzzer-indicator.active #buzzer-icon {
+    animation: buzzer-pulse 0.3s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Execution Controls Bar
+   ========================================================================= */
+
+#exec-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 20px;
+    background: #1e1e2e;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    gap: 16px;
+}
+
+#speed-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#speed-control label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+#speed-slider {
+    width: 100px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+}
+
+#speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    cursor: pointer;
+    border: 1px solid #777;
+}
+
+#speed-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    cursor: pointer;
+    border: 1px solid #777;
+}
+
+#speed-value {
+    color: var(--text-primary);
+    font-family: monospace;
+    min-width: 32px;
+}
+
+#exec-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+#exec-buttons button {
+    padding: 4px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--accent);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#exec-buttons button:hover:not(:disabled) {
+    background: var(--accent-light);
+}
+
+#exec-buttons button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#btn-pause.paused {
+    background: #e65100;
+    border-color: #ff6d00;
+}
+
+#exec-stats {
+    display: flex;
+    gap: 16px;
+}
+
+#exec-stats span {
+    color: var(--text-secondary);
+    font-family: monospace;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* =========================================================================
    Scrollbar Styling
    ========================================================================= */
 
@@ -571,5 +744,41 @@ header h1 {
     #hardware-panel {
         width: 100%;
         min-width: unset;
+    }
+
+    header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    header h1 {
+        font-size: 15px;
+        flex-basis: 100%;
+    }
+
+    #exec-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    #exec-stats {
+        flex-basis: 100%;
+        justify-content: center;
+    }
+
+    .hw-button {
+        min-width: 48px;
+        min-height: 44px;
+    }
+
+    #controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+    }
+
+    #exec-buttons button {
+        min-height: 44px;
+        padding: 6px 14px;
     }
 }

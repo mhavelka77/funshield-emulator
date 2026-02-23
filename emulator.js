@@ -8,11 +8,14 @@
 
 const Emulator = (() => {
     let running = false;
+    let paused = false;
     let animFrameId = null;
     let userSetup = null;
     let userLoop = null;
     let loopCount = 0;
     let errorCallback = null;
+    let speedMultiplier = 1.0; // 0.1x to 2x
+    let onStatsUpdate = null; // callback for UI stats updates
 
     // Display fade timer - for multiplexed 7-seg display
     // Segments fade out if not refreshed within ~5ms (simulates real persistence of vision)
@@ -92,6 +95,7 @@ const Emulator = (() => {
         if (!userSetup || !userLoop) return;
 
         running = true;
+        paused = false;
         loopCount = 0;
         errorCallback = onError;
 
@@ -121,16 +125,18 @@ const Emulator = (() => {
     }
 
     function runLoopBatch(timestamp) {
-        if (!running) return;
+        if (!running || paused) return;
 
         // Run multiple loop iterations per frame to simulate fast execution
         // Real Arduino runs loop() millions of times per second
         // We run enough iterations to keep timing accurate
-        const batchSize = 200; // iterations per animation frame
+        // Speed multiplier scales the batch size
+        const baseBatchSize = 200;
+        const batchSize = Math.max(1, Math.round(baseBatchSize * speedMultiplier));
 
         try {
             for (let i = 0; i < batchSize; i++) {
-                if (!running) break;
+                if (!running || paused) break;
                 userLoop();
                 loopCount++;
             }
@@ -139,6 +145,9 @@ const Emulator = (() => {
             if (errorCallback) errorCallback(`Error in loop() (iteration ${loopCount}): ${e.message}`);
             return;
         }
+
+        // Notify stats update
+        if (onStatsUpdate) onStatsUpdate(loopCount);
 
         // Schedule next batch
         scheduleLoop();
@@ -173,6 +182,7 @@ const Emulator = (() => {
      */
     function stop() {
         running = false;
+        paused = false;
         if (animFrameId) {
             cancelAnimationFrame(animFrameId);
             animFrameId = null;
@@ -197,6 +207,42 @@ const Emulator = (() => {
         return result;
     }
 
+    function pause() {
+        if (!running || paused) return;
+        paused = true;
+    }
+
+    function resume() {
+        if (!running || !paused) return;
+        paused = false;
+        scheduleLoop();
+    }
+
+    function isPaused() {
+        return paused;
+    }
+
+    function step() {
+        if (!running || !userLoop) return;
+        // Execute one loop iteration
+        try {
+            userLoop();
+            loopCount++;
+            if (onStatsUpdate) onStatsUpdate(loopCount);
+        } catch (e) {
+            running = false;
+            if (errorCallback) errorCallback(`Error in loop() (iteration ${loopCount}): ${e.message}`);
+        }
+    }
+
+    function setSpeed(multiplier) {
+        speedMultiplier = Math.max(0.05, Math.min(2.0, multiplier));
+    }
+
+    function setStatsCallback(cb) {
+        onStatsUpdate = cb;
+    }
+
     function isRunning() {
         return running;
     }
@@ -210,6 +256,12 @@ const Emulator = (() => {
         run,
         stop,
         reset,
+        pause,
+        resume,
+        isPaused,
+        step,
+        setSpeed,
+        setStatsCallback,
         isRunning,
         getLoopCount,
     };

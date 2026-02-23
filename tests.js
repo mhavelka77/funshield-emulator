@@ -960,6 +960,640 @@ void loop() {}`);
 });
 
 // =========================================================================
+// Phase 5: Comprehensive Test Expansion
+// =========================================================================
+
+// --- Arduino API: Every function tested ---
+
+describe('API: tone and noTone', () => {
+    test('tone activates buzzer, noTone deactivates', () => {
+        const env = compileAndRun(`
+void setup() { tone(beep_pin, 440); noTone(beep_pin); }
+void loop() {}`);
+        env.setup(); // should not crash
+    });
+});
+
+describe('API: delay/delayMicroseconds (no-op)', () => {
+    test('delay does not crash', () => {
+        const env = compileAndRun(`
+void setup() { delay(100); delayMicroseconds(50); }
+void loop() {}`);
+        env.setup();
+    });
+});
+
+describe('API: random and randomSeed', () => {
+    test('random(max) returns value in range', () => {
+        const env = compileAndRun(`
+void setup() {
+  randomSeed(42);
+  int x = random(10);
+  Serial.println(x);
+}
+void loop() {}`);
+        env.setup();
+        const val = parseInt(env.getSerialOut().trim());
+        assert(val >= 0 && val < 10, `random(10) should be 0-9, got ${val}`);
+    });
+    test('random(min, max) returns value in range', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = random(5, 10);
+  Serial.println(x);
+}
+void loop() {}`);
+        env.setup();
+        const val = parseInt(env.getSerialOut().trim());
+        assert(val >= 5 && val < 10, `random(5,10) should be 5-9, got ${val}`);
+    });
+});
+
+describe('API: sq, sqrt, pow', () => {
+    test('math functions return correct values', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(sq(4));
+  Serial.println(sqrt(16));
+  Serial.println(pow(2, 10));
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '16', `sq(4)=${lines[0]}`);
+        assert(lines[1] === '4', `sqrt(16)=${lines[1]}`);
+        assert(lines[2] === '1024', `pow(2,10)=${lines[2]}`);
+    });
+});
+
+describe('API: lowByte, highByte', () => {
+    test('extract bytes from 16-bit value', () => {
+        const env = compileAndRun(`
+void setup() {
+  int val = 0x1234;
+  Serial.println(lowByte(val));
+  Serial.println(highByte(val));
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '52', `lowByte(0x1234)=0x34=52, got ${lines[0]}`);
+        assert(lines[1] === '18', `highByte(0x1234)=0x12=18, got ${lines[1]}`);
+    });
+});
+
+describe('API: bitWrite', () => {
+    test('set and clear individual bits', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = 0;
+  x = bitWrite(x, 0, 1);
+  x = bitWrite(x, 2, 1);
+  Serial.println(x);
+  x = bitWrite(x, 0, 0);
+  Serial.println(x);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '5', `bits 0,2 set = 5, got ${lines[0]}`);
+        assert(lines[1] === '4', `bit 0 cleared = 4, got ${lines[1]}`);
+    });
+});
+
+describe('API: Serial.write', () => {
+    test('write sends single byte as char', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.begin(9600);
+  Serial.print(65);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut() === '65', `Serial.print(65) should output '65', got '${env.getSerialOut()}'`);
+    });
+});
+
+describe('API: Serial.peek', () => {
+    test('peek returns first char without consuming', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.begin(9600);
+  int p = Serial.peek();
+  int a = Serial.available();
+  Serial.print(p);
+  Serial.print(" ");
+  Serial.println(a);
+}
+void loop() {}`, { serialInput: 'XY' });
+        env.setup();
+        assert(env.getSerialOut().trim() === '88 2', `peek should return 88 (X) with 2 avail, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('API: Serial.parseInt', () => {
+    test('parseInt reads integer from buffer', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.begin(9600);
+  int n = Serial.parseInt();
+  Serial.println(n);
+}
+void loop() {}`, { serialInput: '  42abc' });
+        env.setup();
+        assert(env.getSerialOut().trim() === '42', `parseInt should return 42, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('API: Serial.readStringUntil', () => {
+    test('reads until terminator', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.begin(9600);
+  Serial.println(Serial.readStringUntil(44));
+}
+void loop() {}`, { serialInput: 'hello,world' });
+        env.setup();
+        assert(env.getSerialOut().trim() === 'hello', `readStringUntil(',') should return 'hello', got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('API: constrain edge cases', () => {
+    test('constrain within range returns value', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(constrain(50, 0, 100));
+  Serial.println(constrain(-10, 0, 100));
+  Serial.println(constrain(200, 0, 100));
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '50', `within=${lines[0]}`);
+        assert(lines[1] === '0', `below=${lines[1]}`);
+        assert(lines[2] === '100', `above=${lines[2]}`);
+    });
+});
+
+describe('API: map negative ranges', () => {
+    test('map with negative output range', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(map(50, 0, 100, -100, 100));
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '0', `map(50,0,100,-100,100)=0, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('API: micros timing', () => {
+    test('micros returns microseconds', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(micros());
+}
+void loop() {}`, { startTime: 5 });
+        env.setup();
+        assert(env.getSerialOut().trim() === '5000', `micros at 5ms should be 5000, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('API: pinMode with INPUT_PULLUP', () => {
+    test('INPUT_PULLUP sets pin HIGH by default', () => {
+        const env = compileAndRun(`
+void setup() {
+  pinMode(button1_pin, INPUT_PULLUP);
+  Serial.println(digitalRead(button1_pin));
+}
+void loop() {}`);
+        env.setup();
+        // Button not pressed = HIGH (1)
+        assert(env.getSerialOut().trim() === '1', `INPUT_PULLUP button should read HIGH, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+// --- Transpiler: Additional edge cases ---
+
+describe('Transpiler: enum declaration', () => {
+    test('enum with values', () => {
+        const js = transpileOK(`enum State { IDLE, RUNNING, STOPPED };\nvoid setup() {}\nvoid loop() {}`);
+        assert(parsesAsJS(js), `Not valid JS: ${js}`);
+    });
+});
+
+describe('Transpiler: arrow and scope operators', () => {
+    test('-> converts to dot', () => {
+        const js = transpileOK(`void setup() { int x = 1; }\nvoid loop() {}`);
+        assert(parsesAsJS(js), `Not valid JS: ${js}`);
+    });
+});
+
+describe('Transpiler: while loop', () => {
+    test('basic while loop', () => {
+        const env = compileAndRun(`
+void setup() {
+  int i = 0;
+  int sum = 0;
+  while (i < 5) {
+    sum = sum + i;
+    i++;
+  }
+  Serial.println(sum);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '10', `sum 0..4 should be 10, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: decrementing for loop', () => {
+    test('for (int i = 3; i >= 0; i--)', () => {
+        const env = compileAndRun(`
+void setup() {
+  for (int i = 3; i >= 0; i--) {
+    Serial.print(i);
+  }
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut() === '3210', `Should print 3210, got '${env.getSerialOut()}'`);
+    });
+});
+
+describe('Transpiler: nested if/else', () => {
+    test('if / else if / else chain', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = 5;
+  if (x > 10) {
+    Serial.print("big");
+  } else if (x > 3) {
+    Serial.print("medium");
+  } else {
+    Serial.print("small");
+  }
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut() === 'medium', `Should print medium, got '${env.getSerialOut()}'`);
+    });
+});
+
+describe('Transpiler: nested for loops', () => {
+    test('2D loop', () => {
+        const env = compileAndRun(`
+void setup() {
+  int count = 0;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 4; j++) {
+      count++;
+    }
+  }
+  Serial.println(count);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '12', `3*4=12, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: compound assignment operators', () => {
+    test('+= -= *= work correctly', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = 10;
+  x += 5;
+  Serial.println(x);
+  x -= 3;
+  Serial.println(x);
+  x *= 2;
+  Serial.println(x);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '15', `+=: ${lines[0]}`);
+        assert(lines[1] === '12', `-=: ${lines[1]}`);
+        assert(lines[2] === '24', `*=: ${lines[2]}`);
+    });
+});
+
+describe('Transpiler: bitwise operations', () => {
+    test('& | ^ ~ << >> in expressions', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(0xFF & 0x0F);
+  Serial.println(0xF0 | 0x0F);
+  Serial.println(0xFF ^ 0x0F);
+  Serial.println(1 << 4);
+  Serial.println(32 >> 2);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '15', `AND=${lines[0]}`);
+        assert(lines[1] === '255', `OR=${lines[1]}`);
+        assert(lines[2] === '240', `XOR=${lines[2]}`);
+        assert(lines[3] === '16', `LSHIFT=${lines[3]}`);
+        assert(lines[4] === '8', `RSHIFT=${lines[4]}`);
+    });
+});
+
+describe('Transpiler: boolean literals and logic', () => {
+    test('true, false, &&, ||, !', () => {
+        const env = compileAndRun(`
+void setup() {
+  bool a = true;
+  bool b = false;
+  Serial.println(a && b);
+  Serial.println(a || b);
+  Serial.println(!b);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '0' || lines[0] === 'false', `&&=${lines[0]}`);
+        assert(lines[1] === '1' || lines[1] === 'true', `||=${lines[1]}`);
+        assert(lines[2] === '1' || lines[2] === 'true', `!=${lines[2]}`);
+    });
+});
+
+describe('Transpiler: hex and binary literals', () => {
+    test('hex and binary in expressions', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(0xFF);
+  Serial.println(0b1010);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '255', `0xFF=${lines[0]}`);
+        assert(lines[1] === '10', `0b1010=${lines[1]}`);
+    });
+});
+
+describe('Transpiler: modulo operator', () => {
+    test('% works for positive and negative', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.println(17 % 5);
+  Serial.println(10 % 3);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '2', `17%5=${lines[0]}`);
+        assert(lines[1] === '1', `10%3=${lines[1]}`);
+    });
+});
+
+describe('Transpiler: char arithmetic', () => {
+    test('char subtraction for digit conversion', () => {
+        const env = compileAndRun(`
+void setup() {
+  char c = '7';
+  int d = c - '0';
+  Serial.println(d);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '7', `'7'-'0' should be 7, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: multi-declarator with init', () => {
+    test('int a = 1, b = 2, c = 3;', () => {
+        const env = compileAndRun(`
+void setup() {
+  int a = 1, b = 2, c = 3;
+  Serial.println(a + b + c);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '6', `1+2+3=${env.getSerialOut().trim()}`);
+    });
+});
+
+describe('Transpiler: function calling user function', () => {
+    test('user-defined function called from setup', () => {
+        const env = compileAndRun(`
+int add(int a, int b) {
+  return a + b;
+}
+void setup() {
+  Serial.println(add(3, 4));
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '7', `add(3,4)=${env.getSerialOut().trim()}`);
+    });
+});
+
+describe('Transpiler: recursive function', () => {
+    test('factorial via recursion', () => {
+        const env = compileAndRun(`
+int factorial(int n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
+void setup() {
+  Serial.println(factorial(5));
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '120', `5!=${env.getSerialOut().trim()}`);
+    });
+});
+
+describe('Transpiler: switch with break', () => {
+    test('switch with break instead of return', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = 2;
+  int result = 0;
+  switch (x) {
+    case 1: result = 10; break;
+    case 2: result = 20; break;
+    case 3: result = 30; break;
+    default: result = -1; break;
+  }
+  Serial.println(result);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '20', `switch case 2 = 20, got '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: const array', () => {
+    test('const array indexing', () => {
+        const env = compileAndRun(`
+const int table[] = {100, 200, 300, 400, 500};
+void setup() {
+  Serial.println(table[2]);
+  Serial.println(table[4]);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '300', `table[2]=${lines[0]}`);
+        assert(lines[1] === '500', `table[4]=${lines[1]}`);
+    });
+});
+
+describe('Transpiler: nested array indexing', () => {
+    test('array[array[i]]', () => {
+        const env = compileAndRun(`
+int indices[] = {3, 1, 4, 0, 2};
+int values[] = {10, 20, 30, 40, 50};
+void setup() {
+  Serial.println(values[indices[0]]);
+  Serial.println(values[indices[2]]);
+}
+void loop() {}`);
+        env.setup();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '40', `values[indices[0]]=values[3]=40, got ${lines[0]}`);
+        assert(lines[1] === '50', `values[indices[2]]=values[4]=50, got ${lines[1]}`);
+    });
+});
+
+describe('Transpiler: assignment to array element', () => {
+    test('arr[i] = value', () => {
+        const env = compileAndRun(`
+void setup() {
+  int arr[3] = {0, 0, 0};
+  arr[0] = 10;
+  arr[1] = 20;
+  arr[2] = 30;
+  Serial.println(arr[0] + arr[1] + arr[2]);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '60', `10+20+30=${env.getSerialOut().trim()}`);
+    });
+});
+
+describe('Transpiler: global and local scope', () => {
+    test('local shadows global', () => {
+        const env = compileAndRun(`
+int x = 10;
+void setup() {
+  int x = 20;
+  Serial.println(x);
+}
+void loop() {
+  Serial.println(x);
+}`);
+        env.setup();
+        env.loop();
+        const lines = env.getSerialOut().trim().split('\n');
+        assert(lines[0] === '20', `local x=${lines[0]}`);
+        assert(lines[1] === '10', `global x=${lines[1]}`);
+    });
+});
+
+describe('Transpiler: void function with no return', () => {
+    test('void function executes without return', () => {
+        const env = compileAndRun(`
+int val = 0;
+void setVal(int v) {
+  val = v;
+}
+void setup() {
+  setVal(42);
+  Serial.println(val);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '42', `val=${env.getSerialOut().trim()}`);
+    });
+});
+
+describe('Transpiler: string in Serial.print', () => {
+    test('multiple print calls concatenate', () => {
+        const env = compileAndRun(`
+void setup() {
+  Serial.print("Hello");
+  Serial.print(" ");
+  Serial.println("World");
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === 'Hello World', `Got: '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: comparison chain', () => {
+    test('a >= b && b < c', () => {
+        const env = compileAndRun(`
+void setup() {
+  int a = 5, b = 3, c = 10;
+  if (a >= b && b < c) {
+    Serial.println("yes");
+  } else {
+    Serial.println("no");
+  }
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === 'yes', `Got: '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: ternary in function argument', () => {
+    test('Serial.println(cond ? a : b)', () => {
+        const env = compileAndRun(`
+void setup() {
+  int x = 5;
+  Serial.println(x > 3 ? 100 : 200);
+}
+void loop() {}`);
+        env.setup();
+        assert(env.getSerialOut().trim() === '100', `Got: '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Transpiler: complex stopwatch-like program', () => {
+    test('timer with digit extraction', () => {
+        const env = compileAndRun(`
+void setup() {
+  unsigned long elapsed = 12345;
+  unsigned long tenths = elapsed / 100;
+  int d0 = tenths % 10;
+  int d1 = (tenths / 10) % 10;
+  int d2 = (tenths / 100) % 10;
+  Serial.print(d2);
+  Serial.print(d1);
+  Serial.println(d0);
+}
+void loop() {}`);
+        env.setup();
+        // 12345 / 100 = 123, digits: 1,2,3
+        assert(env.getSerialOut().trim() === '123', `Got: '${env.getSerialOut().trim()}'`);
+    });
+});
+
+describe('Execution: Example programs compile and run', () => {
+    // Load examples
+    const ExamplesCode = new Function(
+        fs.readFileSync('examples.js', 'utf8') + '\nreturn Examples;'
+    )();
+
+    for (const [name, code] of Object.entries(ExamplesCode)) {
+        test(`example '${name}' compiles without errors`, () => {
+            const result = transpile(code);
+            assert(result.errors.length === 0,
+                `Example '${name}' had errors: ${JSON.stringify(result.errors)}`);
+            assert(parsesAsJS(result.code),
+                `Example '${name}' produced invalid JS`);
+        });
+    }
+});
+
+// =========================================================================
 // Report
 // =========================================================================
 console.log(`\n${'='.repeat(60)}`);

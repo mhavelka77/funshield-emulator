@@ -1009,7 +1009,12 @@ const ArduinoTranspiler = (() => {
             const startLine = cur().line;
             const typeName = parseType();
 
-            // struct/class/enum body definition
+            // enum body definition
+            if (typeName.split(' ')[0] === 'enum' && at(T.LBRACE)) {
+                return parseEnumDef(typeName);
+            }
+
+            // struct/class body definition
             if (STRUCT_KEYWORDS.has(typeName.split(' ')[0]) && at(T.LBRACE)) {
                 return parseStructDef(typeName);
             }
@@ -1091,6 +1096,28 @@ const ArduinoTranspiler = (() => {
             }
 
             return { name, isArray, arraySize, init };
+        }
+
+        function parseEnumDef(typeName) {
+            const members = [];
+            expect(T.LBRACE);
+            while (!at(T.RBRACE) && !at(T.EOF)) {
+                const memberName = expect(T.IDENT).value;
+                let valueExpr = null;
+                if (at(T.ASSIGN)) {
+                    pos++; // consume '='
+                    valueExpr = parseExpr();
+                }
+                members.push({ name: memberName, value: valueExpr });
+                if (at(T.COMMA)) pos++; // consume optional comma
+            }
+            expect(T.RBRACE);
+            eat(T.SEMICOLON);
+
+            const parts = typeName.split(' ');
+            const enumName = parts.length > 1 ? parts[1] : '';
+
+            return { type: 'EnumDef', name: enumName, members, line: 0 };
         }
 
         function parseStructDef(typeName) {
@@ -1187,6 +1214,7 @@ const ArduinoTranspiler = (() => {
                 case 'ForwardDecl': return ''; // skip forward declarations
                 case 'VarDecl': return genVarDecl(node);
                 case 'StructDef': return genStructDef(node);
+                case 'EnumDef': return genEnumDef(node);
                 case 'Block': return genBlock(node);
                 case 'ExprStmt': return gen(node.expr) + ';';
                 case 'ReturnStmt': return node.value ? `return ${gen(node.value)};` : 'return;';
@@ -1274,6 +1302,24 @@ const ArduinoTranspiler = (() => {
                 parts.push(`${keyword} ${d.name}${initStr};`);
             }
             return parts.join('\n');
+        }
+
+        function genEnumDef(node) {
+            const lines = [];
+            let nextValue = 0;
+            for (const member of node.members) {
+                if (member.value !== null) {
+                    const valStr = gen(member.value);
+                    lines.push(`const ${member.name} = ${valStr};`);
+                    // Try to evaluate for auto-increment
+                    const parsed = Number(valStr);
+                    nextValue = isNaN(parsed) ? nextValue + 1 : parsed + 1;
+                } else {
+                    lines.push(`const ${member.name} = ${nextValue};`);
+                    nextValue++;
+                }
+            }
+            return lines.join('\n');
         }
 
         function genStructDef(node) {
