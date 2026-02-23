@@ -1,0 +1,13 @@
+{
+  "name": "funshield-emulator",
+  "version": "0.1.0",
+  "description": "Browser-based Arduino Uno + FunShield emulator for NSWI170 labs",
+  "scripts": {
+    "test": "node tests.js",
+    "verify": "node scripts/verify.js",
+    "serve": "python3 -m http.server 8080",
+    "lint": "echo 'TODO: add eslint'"
+  },
+  "keywords": ["arduino", "emulator", "funshield", "nswi170"],
+  "license": "MIT"
+}

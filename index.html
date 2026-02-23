@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino + FunShield Emulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Arduino Uno + FunShield Emulator</h1>
+            <div id="controls">
+                <button id="btn-compile" title="Compile & Upload">Compile & Upload</button>
+                <button id="btn-stop" title="Stop" disabled>Stop</button>
+                <button id="btn-reset" title="Reset" disabled>Reset</button>
+                <span id="status-indicator">Ready</span>
+            </div>
+        </header>
+
+        <div id="main-layout">
+            <!-- Code Editor Panel -->
+            <div id="editor-panel">
+                <div id="editor-header">
+                    <span>solution.ino</span>
+                    <select id="example-select">
+                        <option value="">-- Load Example --</option>
+                        <option value="blink">Lab 2: Blinking LEDs</option>
+                        <option value="knight">Lab 2: Knight Rider</option>
+                        <option value="counter">Lab 3: Button Counter</option>
+                        <option value="segment">Lab 4: Segment Display</option>
+                        <option value="stopwatch">Lab 5: Stopwatch</option>
+                        <option value="scroll">Lab 6: Scrolling Text</option>
+                    </select>
+                </div>
+                <textarea id="code-editor" spellcheck="false">// Arduino + FunShield Emulator
+// Write your Arduino code here!
+
+#include "funshield.h"
+
+void setup() {
+  pinMode(led1_pin, OUTPUT);
+  pinMode(led2_pin, OUTPUT);
+  pinMode(led3_pin, OUTPUT);
+  pinMode(led4_pin, OUTPUT);
+}
+
+int currentLed = 0;
+unsigned long lastChange = 0;
+const int DELAY = 300;
+
+void loop() {
+  unsigned long now = millis();
+  if (now - lastChange >= DELAY) {
+    // Turn off all LEDs
+    digitalWrite(led1_pin, OFF);
+    digitalWrite(led2_pin, OFF);
+    digitalWrite(led3_pin, OFF);
+    digitalWrite(led4_pin, OFF);
+
+    // Turn on current LED
+    int pins[] = {led1_pin, led2_pin, led3_pin, led4_pin};
+    digitalWrite(pins[currentLed], ON);
+
+    currentLed = (currentLed + 1) % 4;
+    lastChange = now;
+  }
+}</textarea>
+            </div>
+
+            <!-- Hardware Visualization Panel -->
+            <div id="hardware-panel">
+                <!-- FunShield Board -->
+                <div id="funshield">
+                    <div id="board-label">FunShield</div>
+
+                    <!-- 7-Segment Display -->
+                    <div id="display-section">
+                        <div id="seven-seg-container">
+                            <div class="seven-seg-digit" id="digit-0">
+                                <svg viewBox="0 0 60 100" class="seg-svg">
+                                    <polygon class="seg seg-a" data-seg="a" points="12,5 48,5 44,12 16,12"/>
+                                    <polygon class="seg seg-b" data-seg="b" points="49,7 49,47 44,42 44,14"/>
+                                    <polygon class="seg seg-c" data-seg="c" points="49,53 49,93 44,88 44,58"/>
+                                    <polygon class="seg seg-d" data-seg="d" points="12,95 48,95 44,88 16,88"/>
+                                    <polygon class="seg seg-e" data-seg="e" points="11,53 11,93 16,88 16,58"/>
+                                    <polygon class="seg seg-f" data-seg="f" points="11,7 11,47 16,42 16,14"/>
+                                    <polygon class="seg seg-g" data-seg="g" points="12,48 16,44 44,44 48,48 44,52 16,52"/>
+                                    <circle class="seg seg-dp" data-seg="dp" cx="55" cy="93" r="4"/>
+                                </svg>
+                            </div>
+                            <div class="seven-seg-digit" id="digit-1">
+                                <svg viewBox="0 0 60 100" class="seg-svg">
+                                    <polygon class="seg seg-a" data-seg="a" points="12,5 48,5 44,12 16,12"/>
+                                    <polygon class="seg seg-b" data-seg="b" points="49,7 49,47 44,42 44,14"/>
+                                    <polygon class="seg seg-c" data-seg="c" points="49,53 49,93 44,88 44,58"/>
+                                    <polygon class="seg seg-d" data-seg="d" points="12,95 48,95 44,88 16,88"/>
+                                    <polygon class="seg seg-e" data-seg="e" points="11,53 11,93 16,88 16,58"/>
+                                    <polygon class="seg seg-f" data-seg="f" points="11,7 11,47 16,42 16,14"/>
+                                    <polygon class="seg seg-g" data-seg="g" points="12,48 16,44 44,44 48,48 44,52 16,52"/>
+                                    <circle class="seg seg-dp" data-seg="dp" cx="55" cy="93" r="4"/>
+                                </svg>
+                            </div>
+                            <div class="seven-seg-digit" id="digit-2">
+                                <svg viewBox="0 0 60 100" class="seg-svg">
+                                    <polygon class="seg seg-a" data-seg="a" points="12,5 48,5 44,12 16,12"/>
+                                    <polygon class="seg seg-b" data-seg="b" points="49,7 49,47 44,42 44,14"/>
+                                    <polygon class="seg seg-c" data-seg="c" points="49,53 49,93 44,88 44,58"/>
+                                    <polygon class="seg seg-d" data-seg="d" points="12,95 48,95 44,88 16,88"/>
+                                    <polygon class="seg seg-e" data-seg="e" points="11,53 11,93 16,88 16,58"/>
+                                    <polygon class="seg seg-f" data-seg="f" points="11,7 11,47 16,42 16,14"/>
+                                    <polygon class="seg seg-g" data-seg="g" points="12,48 16,44 44,44 48,48 44,52 16,52"/>
+                                    <circle class="seg seg-dp" data-seg="dp" cx="55" cy="93" r="4"/>
+                                </svg>
+                            </div>
+                            <div class="seven-seg-digit" id="digit-3">
+                                <svg viewBox="0 0 60 100" class="seg-svg">
+                                    <polygon class="seg seg-a" data-seg="a" points="12,5 48,5 44,12 16,12"/>
+                                    <polygon class="seg seg-b" data-seg="b" points="49,7 49,47 44,42 44,14"/>
+                                    <polygon class="seg seg-c" data-seg="c" points="49,53 49,93 44,88 44,58"/>
+                                    <polygon class="seg seg-d" data-seg="d" points="12,95 48,95 44,88 16,88"/>
+                                    <polygon class="seg seg-e" data-seg="e" points="11,53 11,93 16,88 16,58"/>
+                                    <polygon class="seg seg-f" data-seg="f" points="11,7 11,47 16,42 16,14"/>
+                                    <polygon class="seg seg-g" data-seg="g" points="12,48 16,44 44,44 48,48 44,52 16,52"/>
+                                    <circle class="seg seg-dp" data-seg="dp" cx="55" cy="93" r="4"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LEDs -->
+                    <div id="led-section">
+                        <div class="led-group">
+                            <div class="led" id="led-1"></div>
+                            <span>LED1</span>
+                        </div>
+                        <div class="led-group">
+                            <div class="led" id="led-2"></div>
+                            <span>LED2</span>
+                        </div>
+                        <div class="led-group">
+                            <div class="led" id="led-3"></div>
+                            <span>LED3</span>
+                        </div>
+                        <div class="led-group">
+                            <div class="led" id="led-4"></div>
+                            <span>LED4</span>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div id="button-section">
+                        <div class="hw-button-group">
+                            <button class="hw-button" id="hw-btn-1" data-pin="A1">BTN1</button>
+                            <span>A1</span>
+                        </div>
+                        <div class="hw-button-group">
+                            <button class="hw-button" id="hw-btn-2" data-pin="A2">BTN2</button>
+                            <span>A2</span>
+                        </div>
+                        <div class="hw-button-group">
+                            <button class="hw-button" id="hw-btn-3" data-pin="A3">BTN3</button>
+                            <span>A3</span>
+                        </div>
+                    </div>
+
+                    <!-- Trimmer -->
+                    <div id="trimmer-section">
+                        <label for="trimmer">Trimmer (A0)</label>
+                        <input type="range" id="trimmer" min="0" max="1023" value="512">
+                        <span id="trimmer-value">512</span>
+                    </div>
+                </div>
+
+                <!-- Serial Monitor -->
+                <div id="serial-monitor">
+                    <div id="serial-header">
+                        <span>Serial Monitor</span>
+                        <div id="serial-input-area">
+                            <input type="text" id="serial-input" placeholder="Send to Serial...">
+                            <button id="serial-send">Send</button>
+                        </div>
+                        <button id="serial-clear">Clear</button>
+                    </div>
+                    <div id="serial-output"></div>
+                </div>
+
+                <!-- Compiler output -->
+                <div id="compiler-output">
+                    <div id="compiler-header">Compiler Output</div>
+                    <div id="compiler-messages"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="transpiler.js"></script>
+    <script src="arduino-api.js"></script>
+    <script src="emulator.js"></script>
+    <script src="examples.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
