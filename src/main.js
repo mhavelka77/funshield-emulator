@@ -13,4 +13,13 @@ if (textarea && typeof App !== 'undefined') {
         App.compile();
     });
     App.setEditor(editorApi);
+
+    // Wire up Vim mode toggle
+    const vimToggle = document.getElementById('vim-toggle');
+    if (vimToggle) {
+        vimToggle.addEventListener('change', () => {
+            editorApi.setVimMode(vimToggle.checked);
+            editorApi.focus();
+        });
+    }
 }

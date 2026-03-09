@@ -13,7 +13,7 @@
  */
 
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, rectangularSelection } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { cpp } from '@codemirror/lang-cpp';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, indentWithTab, history, historyKeymap, undo, redo } from '@codemirror/commands';
@@ -21,6 +21,7 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
 import { setDiagnostics } from '@codemirror/lint';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { vim } from '@replit/codemirror-vim';
 
 // Custom theme adjustments to match our dark UI
 const customTheme = EditorView.theme({
@@ -46,11 +47,14 @@ const customTheme = EditorView.theme({
 let editorView = null;
 let compileCallback = null;
 
+// Compartment allows hot-swapping vim mode without recreating the editor
+const vimCompartment = new Compartment();
+
 /**
  * Initialize CodeMirror editor, replacing the textarea.
  * @param {HTMLTextAreaElement} textarea - The textarea element to replace
  * @param {Function} onCompile - Callback when user presses Ctrl+Enter
- * @returns {object} Editor API: { getValue, setValue, setErrors, clearErrors, focus }
+ * @returns {object} Editor API: { getValue, setValue, setErrors, clearErrors, focus, setVimMode }
  */
 export function initEditor(textarea, onCompile) {
     compileCallback = onCompile;
@@ -74,6 +78,7 @@ export function initEditor(textarea, onCompile) {
     const state = EditorState.create({
         doc: initialCode,
         extensions: [
+            vimCompartment.of([]), // vim mode off by default
             lineNumbers(),
             highlightActiveLineGutter(),
             highlightActiveLine(),
@@ -162,6 +167,15 @@ export function initEditor(textarea, onCompile) {
         },
         getView() {
             return editorView;
+        },
+        /**
+         * Enable or disable Vim keybindings.
+         * @param {boolean} enabled
+         */
+        setVimMode(enabled) {
+            editorView.dispatch({
+                effects: vimCompartment.reconfigure(enabled ? vim() : []),
+            });
         },
     };
 }
