@@ -66,6 +66,50 @@ const ArduinoAPI = (() => {
     const digits = [0xc0, 0xf9, 0xa4, 0xb0, 0x99, 0x92, 0x82, 0xf8, 0x80, 0x90];
     const empty_glyph = 0xff;
 
+    // Canonical funshield.h uppercase names (injected so #include "funshield.h" works out of the box)
+    const BEEP_PIN = beep_pin;
+    const LED1_PIN = led1_pin;
+    const LED2_PIN = led2_pin;
+    const LED3_PIN = led3_pin;
+    const LED4_PIN = led4_pin;
+    const BUTTON1_PIN = button1_pin;
+    const BUTTON2_PIN = button2_pin;
+    const BUTTON3_PIN = button3_pin;
+    const TRIMMER_PIN = trimmer_pin;
+    const SEG7_LATCH_PIN = latch_pin;
+    const SEG7_CLOCK_PIN = clock_pin;
+    const SEG7_DATA_PIN = data_pin;
+    const SEG7_EMPTY_GLYPH = empty_glyph;
+    const SEG7_DIGIT_GLYPHS = digits;
+    const SEG7_LETTER_GLYPHS = [
+        0b10001000, // A
+        0b10000011, // b
+        0b11000110, // C
+        0b10100001, // d
+        0b10000110, // E
+        0b10001110, // F
+        0b10000010, // G
+        0b10001001, // H
+        0b11111001, // I
+        0b11100001, // J
+        0b10000101, // K
+        0b11000111, // L
+        0b11001000, // M
+        0b10101011, // n
+        0b10100011, // o
+        0b10001100, // P
+        0b10011000, // q
+        0b10101111, // r
+        0b10010010, // S
+        0b10000111, // t
+        0b11000001, // U
+        0b11100011, // v
+        0b10000001, // W
+        0b10110110, // ksi
+        0b10010001, // Y
+        0b10100100, // Z
+    ];
+
     // Additional character glyphs for the 7-seg display
     // Letters that can be displayed on 7-seg
     const CHAR_GLYPHS = {
@@ -544,6 +588,10 @@ const ArduinoAPI = (() => {
             button1_pin, button2_pin, button3_pin,
             trimmer_pin,
             digits, empty_glyph,
+            BEEP_PIN, LED1_PIN, LED2_PIN, LED3_PIN, LED4_PIN,
+            BUTTON1_PIN, BUTTON2_PIN, BUTTON3_PIN, TRIMMER_PIN,
+            SEG7_LATCH_PIN, SEG7_CLOCK_PIN, SEG7_DATA_PIN,
+            SEG7_EMPTY_GLYPH, SEG7_DIGIT_GLYPHS, SEG7_LETTER_GLYPHS,
 
             // Pin I/O
             pinMode, digitalWrite, digitalRead,

@@ -129,6 +129,9 @@ const ArduinoTranspiler = (() => {
         const defines = {};     // name → { params, body } or { body }
         const lines = code.split('\n');
         const result = [];
+        // Stack for conditional compilation: { parentSkip: bool, skip: bool }
+        const skipStack = [];
+        const skipping = () => skipStack.length > 0 && skipStack[skipStack.length - 1].skip;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -138,24 +141,48 @@ const ArduinoTranspiler = (() => {
                 const directive = trimmed.slice(1).trim();
 
                 if (directive.startsWith('include')) {
-                    // Strip #include entirely
+                    // Pre-define include guards for known emulated headers
+                    if (!skipping() && /["<]funshield\.h[">]/.test(directive)) {
+                        defines['FUNSHIELD_CONSTANTS_H__'] = { body: '1' };
+                    }
+                    result.push('');
+                } else if (directive.startsWith('ifndef')) {
+                    const name = directive.slice(5).trim();
+                    const parent = skipping();
+                    skipStack.push({ parentSkip: parent, skip: parent || !!defines[name] });
+                    result.push('');
+                } else if (directive.startsWith('ifdef')) {
+                    const name = directive.slice(5).trim();
+                    const parent = skipping();
+                    skipStack.push({ parentSkip: parent, skip: parent || !defines[name] });
+                    result.push('');
+                } else if (directive.startsWith('else')) {
+                    if (skipStack.length > 0) {
+                        const top = skipStack[skipStack.length - 1];
+                        if (!top.parentSkip) top.skip = !top.skip;
+                    }
+                    result.push('');
+                } else if (directive.startsWith('endif')) {
+                    if (skipStack.length > 0) skipStack.pop();
                     result.push('');
                 } else if (directive.startsWith('define')) {
-                    const rest = directive.slice(6).trim();
-                    // Function-like macro: #define NAME(a,b) body
-                    const funcMatch = rest.match(/^(\w+)\(([^)]*)\)\s+(.*)/);
-                    if (funcMatch) {
-                        const name = funcMatch[1];
-                        const params = funcMatch[2].split(',').map(p => p.trim());
-                        const body = funcMatch[3].trim();
-                        defines[name] = { params, body };
-                    } else {
-                        // Simple macro: #define NAME value
-                        const simpleMatch = rest.match(/^(\w+)(?:\s+(.*))?/);
-                        if (simpleMatch) {
-                            const name = simpleMatch[1];
-                            const body = simpleMatch[2] ? simpleMatch[2].trim() : 'true';
-                            defines[name] = { body };
+                    if (!skipping()) {
+                        const rest = directive.slice(6).trim();
+                        // Function-like macro: #define NAME(a,b) body
+                        const funcMatch = rest.match(/^(\w+)\(([^)]*)\)\s+(.*)/);
+                        if (funcMatch) {
+                            const name = funcMatch[1];
+                            const params = funcMatch[2].split(',').map(p => p.trim());
+                            const body = funcMatch[3].trim();
+                            defines[name] = { params, body };
+                        } else {
+                            // Simple macro: #define NAME value
+                            const simpleMatch = rest.match(/^(\w+)(?:\s+(.*))?/);
+                            if (simpleMatch) {
+                                const name = simpleMatch[1];
+                                const body = simpleMatch[2] ? simpleMatch[2].trim() : '1';
+                                defines[name] = { body };
+                            }
                         }
                     }
                     result.push('');
@@ -164,7 +191,7 @@ const ArduinoTranspiler = (() => {
                     result.push('');
                 }
             } else {
-                result.push(line);
+                result.push(skipping() ? '' : line);
             }
         }
 
