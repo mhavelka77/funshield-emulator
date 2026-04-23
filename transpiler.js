@@ -91,7 +91,7 @@ const ArduinoTranspiler = (() => {
 
     // Storage / qualifier keywords that prefix types
     const QUALIFIER_KEYWORDS = new Set([
-        'const', 'volatile', 'static', 'extern', 'register', 'inline',
+        'const', 'constexpr', 'volatile', 'static', 'extern', 'register', 'inline',
     ]);
 
     const CONTROL_KEYWORDS = new Set([
@@ -1093,6 +1093,9 @@ const ArduinoTranspiler = (() => {
                 } else {
                     init = parseExpr();
                 }
+            } else if (isArray && at(T.LBRACE)) {
+                // C++11 brace-init without '=': int arr[] { ... }
+                init = parseArrayInit();
             }
 
             return { name, isArray, arraySize, init };
