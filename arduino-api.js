@@ -536,7 +536,7 @@ const ArduinoAPI = (() => {
     // Sizeof helper
     // =========================================================================
     function __sizeof(x) {
-        if (Array.isArray(x)) return x.length;
+        if (Array.isArray(x)) return x.length * 2; // AVR int = 2 bytes; keeps sizeof(arr)/sizeof(arr[0]) correct
         if (typeof x === 'string') return x.length + 1; // +1 for null terminator
         return 2; // Default to int size (AVR is 16-bit)
     }
