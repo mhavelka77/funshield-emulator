@@ -202,7 +202,7 @@ const App = (function () {
 
         hw.onDisplayChange = function (display) {
             for (let i = 0; i < 4; i++) {
-                updateDisplayDigit(i, display.positions[i].glyph, display.positions[i].brightness);
+                updateDisplayDigit(i, display.positions[i].glyph, 1.0);
             }
         };
 

@@ -17,9 +17,6 @@ const Emulator = (() => {
     let speedMultiplier = 1.0; // 0.1x to 2x
     let onStatsUpdate = null; // callback for UI stats updates
 
-    // Display fade timer - for multiplexed 7-seg display
-    // Segments fade out if not refreshed within ~5ms (simulates real persistence of vision)
-    const DISPLAY_FADE_MS = 8;
     let displayFadeInterval = null;
 
     /**
@@ -111,9 +108,6 @@ const Emulator = (() => {
             return;
         }
 
-        // Start the display fade checker
-        startDisplayFade();
-
         // Start the loop
         scheduleLoop();
     }
@@ -151,30 +145,6 @@ const Emulator = (() => {
 
         // Schedule next batch
         scheduleLoop();
-    }
-
-    function startDisplayFade() {
-        // Check every 4ms if any digit should fade
-        displayFadeInterval = setInterval(() => {
-            if (!running) return;
-            const hw = ArduinoAPI.getState();
-            const now = performance.now();
-            let changed = false;
-
-            for (let i = 0; i < 4; i++) {
-                const pos = hw.display.positions[i];
-                const timeSinceUpdate = now - pos.lastUpdate;
-                if (timeSinceUpdate > DISPLAY_FADE_MS && pos.brightness > 0) {
-                    // Gradually fade - but keep showing if recently updated
-                    pos.brightness = Math.max(0, 1.0 - (timeSinceUpdate - DISPLAY_FADE_MS) / 20);
-                    changed = true;
-                }
-            }
-
-            if (changed && hw.onDisplayChange) {
-                hw.onDisplayChange(hw.display);
-            }
-        }, 4);
     }
 
     /**

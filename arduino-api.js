@@ -163,10 +163,10 @@ const ArduinoAPI = (() => {
                 // Each position stores: { glyph, timestamp }
                 // We track the last written glyph per position for multiplexing
                 positions: [
-                    { glyph: 0xff, lastUpdate: 0, brightness: 0 },
-                    { glyph: 0xff, lastUpdate: 0, brightness: 0 },
-                    { glyph: 0xff, lastUpdate: 0, brightness: 0 },
-                    { glyph: 0xff, lastUpdate: 0, brightness: 0 },
+                    { glyph: 0xff },
+                    { glyph: 0xff },
+                    { glyph: 0xff },
+                    { glyph: 0xff },
                 ],
 
             },
@@ -361,8 +361,6 @@ const ArduinoAPI = (() => {
             for (let pos = 0; pos < 4; pos++) {
                 if (digitSelect & (1 << pos)) {
                     hw.display.positions[pos].glyph = segmentData;
-                    hw.display.positions[pos].lastUpdate = performance.now();
-                    hw.display.positions[pos].brightness = 1.0;
                 }
             }
 
