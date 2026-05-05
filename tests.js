@@ -377,6 +377,35 @@ void loop() {}`;
         const js = transpileOK(code);
         assert(parsesAsJS(js), `Not valid JS: ${js}`);
     });
+
+    test('user-defined struct used as type, with brace-init and reference params', () => {
+        const code = `
+enum State { STOPPED, RUNNING };
+struct Stopwatch {
+  State state;
+  unsigned long elapsedMs;
+};
+Stopwatch sw = { STOPPED, 0 };
+void tick(Stopwatch& s) { s.elapsedMs = s.elapsedMs + 1; }
+void setup() { tick(sw); }
+void loop() {}`;
+        const env = compileAndRun(code);
+        env.setup();
+        env.loop();
+        // Just confirms setup() ran (which calls tick() and mutates the struct)
+        // through the reference parameter without throwing.
+    });
+
+    test('array parameter with empty brace-init global', () => {
+        const code = `
+const int N = 3;
+bool flags[N] = {};
+void mark(int i, bool v, bool flags[]) { flags[i] = v; }
+void setup() { mark(1, true, flags); }
+void loop() {}`;
+        const env = compileAndRun(code);
+        env.setup();
+    });
 });
 
 describe('Transpiler: switch with char cases', () => {

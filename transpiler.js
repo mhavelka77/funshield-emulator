@@ -441,6 +441,7 @@ const ArduinoTranspiler = (() => {
     // =====================================================================
     function parse(tokens, errors) {
         let pos = 0;
+        const userTypes = new Set(); // struct/enum/class names declared so far
 
         function cur() { return tokens[pos] || { type: T.EOF, value: '', line: 0, col: 0 }; }
         function at(type, val) {
@@ -468,7 +469,8 @@ const ArduinoTranspiler = (() => {
             return t.type === T.IDENT && (
                 TYPE_KEYWORDS.has(t.value) ||
                 QUALIFIER_KEYWORDS.has(t.value) ||
-                STRUCT_KEYWORDS.has(t.value)
+                STRUCT_KEYWORDS.has(t.value) ||
+                userTypes.has(t.value)
             );
         }
 
@@ -489,6 +491,9 @@ const ArduinoTranspiler = (() => {
                 if (cur().type === T.IDENT) {
                     parts.push(tokens[pos++].value);
                 }
+                // Pointer/reference after struct name
+                while (at(T.STAR)) { parts.push('*'); pos++; }
+                while (at(T.AMP)) { parts.push('&'); pos++; }
                 return parts.join(' ');
             }
 
@@ -504,6 +509,9 @@ const ArduinoTranspiler = (() => {
                 while (cur().type === T.IDENT && (cur().value === 'long' || cur().value === 'int' || cur().value === 'short')) {
                     parts.push(tokens[pos++].value);
                 }
+            } else if (cur().type === T.IDENT && userTypes.has(cur().value)) {
+                // User-defined type (struct/enum/class name)
+                parts.push(tokens[pos++].value);
             } else if (parts.length > 0) {
                 // "unsigned" alone means "unsigned int"
             } else {
@@ -1068,6 +1076,11 @@ const ArduinoTranspiler = (() => {
                     const pType = parseType();
                     let pName = '';
                     if (at(T.IDENT)) pName = tokens[pos++].value;
+                    // Array suffix on parameter name: void f(int arr[]) or void f(int arr[N])
+                    if (eat(T.LBRACKET)) {
+                        if (!at(T.RBRACKET)) parseExpr(); // consume size, ignored
+                        expect(T.RBRACKET);
+                    }
                     // Default value
                     let pDefault = null;
                     if (eat(T.ASSIGN)) pDefault = parseExpr();
@@ -1146,11 +1159,18 @@ const ArduinoTranspiler = (() => {
 
             const parts = typeName.split(' ');
             const enumName = parts.length > 1 ? parts[1] : '';
+            if (enumName) userTypes.add(enumName);
 
             return { type: 'EnumDef', name: enumName, members, line: 0 };
         }
 
         function parseStructDef(typeName) {
+            // Extract struct name from typeName (e.g., "struct Button") and
+            // register it BEFORE parsing the body so self-references work.
+            const parts = typeName.split(' ');
+            const structName = parts.length > 1 ? parts[1] : '';
+            if (structName) userTypes.add(structName);
+
             const body = [];
             expect(T.LBRACE);
             while (!at(T.RBRACE) && !at(T.EOF)) {
@@ -1162,10 +1182,6 @@ const ArduinoTranspiler = (() => {
             }
             expect(T.RBRACE);
             eat(T.SEMICOLON);
-
-            // Extract struct name from typeName (e.g., "struct Button")
-            const parts = typeName.split(' ');
-            const structName = parts.length > 1 ? parts[1] : '';
 
             return { type: 'StructDef', name: structName, keyword: parts[0], body, line: 0 };
         }
@@ -1228,12 +1244,34 @@ const ArduinoTranspiler = (() => {
 
         // Track which names are function-like (for knowing if identifier is a function)
         const functionNames = new Set();
+        // Track struct definitions: name → ordered list of member field names
+        const structInfo = new Map();
 
-        // First pass: collect function names and global variable types
+        // First pass: collect function names and struct definitions
         for (const node of ast.body) {
             if (node.type === 'FunctionDef' || node.type === 'ForwardDecl') {
                 functionNames.add(node.name);
             }
+            if (node.type === 'StructDef' && node.name) {
+                const fields = [];
+                for (const item of node.body) {
+                    if (item.type === 'VarDecl') {
+                        for (const d of item.declarators) fields.push(d.name);
+                    }
+                }
+                structInfo.set(node.name, fields);
+            }
+        }
+
+        // Strip qualifiers and pointer/reference markers from a type string,
+        // returning the bare base type name (e.g., "const Stopwatch &" → "Stopwatch").
+        function baseTypeOf(typeName) {
+            if (!typeName) return '';
+            return typeName
+                .replace(/\b(const|constexpr|volatile|static|extern|inline|register)\b/g, '')
+                .replace(/[*&]/g, '')
+                .trim()
+                .replace(/\s+/g, ' ');
         }
 
         function gen(node) {
@@ -1305,6 +1343,9 @@ const ArduinoTranspiler = (() => {
 
         function genVarDecl(node) {
             const parts = [];
+            const baseType = baseTypeOf(node.typeName);
+            const isStructType = structInfo.has(baseType);
+
             for (const d of node.declarators) {
                 types.declare(d.name, node.typeName);
 
@@ -1312,8 +1353,21 @@ const ArduinoTranspiler = (() => {
                 let initStr = '';
 
                 if (d.init) {
-                    if (d.init.type === 'ArrayInit') {
-                        initStr = ` = [${d.init.elements.map(e => gen(e)).join(', ')}]`;
+                    if (d.init.type === 'ArrayInit' && isStructType && !d.isArray) {
+                        // Struct brace-init: map positional values to named fields.
+                        const fields = structInfo.get(baseType);
+                        const pairs = d.init.elements.map((e, i) => {
+                            const fname = fields[i] !== undefined ? fields[i] : `__f${i}`;
+                            return `${fname}: ${gen(e)}`;
+                        }).join(', ');
+                        initStr = ` = new ${baseType}({${pairs}})`;
+                    } else if (d.init.type === 'ArrayInit') {
+                        if (d.isArray && d.arraySize && d.init.elements.length === 0) {
+                            // Empty brace-init for a sized array → fill with default
+                            initStr = ` = new Array(${gen(d.arraySize)}).fill(0)`;
+                        } else {
+                            initStr = ` = [${d.init.elements.map(e => gen(e)).join(', ')}]`;
+                        }
                     } else if (d.init.type === 'StringLiteral' && d.isArray) {
                         // char array with string init — convert to array of chars as a string
                         // Keep as string for indexing compatibility
@@ -1324,6 +1378,9 @@ const ArduinoTranspiler = (() => {
                 } else if (d.isArray && d.arraySize) {
                     // Uninitialized sized array → fill with zeros
                     initStr = ` = new Array(${gen(d.arraySize)}).fill(0)`;
+                } else if (isStructType && !d.isArray) {
+                    // Bare struct declaration: instantiate with defaults
+                    initStr = ` = new ${baseType}()`;
                 } else if (!d.isArray) {
                     // Uninitialized scalar — no initializer needed in JS
                     initStr = '';
@@ -1381,7 +1438,15 @@ const ArduinoTranspiler = (() => {
                 } else if (item.type === 'VarDecl') {
                     for (const d of item.declarators) {
                         types.declare(d.name, item.typeName);
-                        const initVal = d.init ? gen(d.init) : (d.isArray ? '[]' : '0');
+                        let initVal;
+                        if (d.init) {
+                            initVal = gen(d.init);
+                        } else if (d.isArray) {
+                            initVal = '[]';
+                        } else {
+                            const fieldBase = baseTypeOf(item.typeName);
+                            initVal = structInfo.has(fieldBase) ? `new ${fieldBase}()` : '0';
+                        }
                         memberInits.push(`this.${d.name} = ${initVal};`);
                     }
                 }
@@ -1390,7 +1455,7 @@ const ArduinoTranspiler = (() => {
 
             const constructorBody = memberInits.length > 0 ? memberInits.join('\n') : '';
             const methodsStr = methods.join('\n');
-            return `class ${node.name} {\nconstructor() {\n${constructorBody}\n}\n${methodsStr}\n}`;
+            return `class ${node.name} {\nconstructor(__init) {\n${constructorBody}\nif (__init) Object.assign(this, __init);\n}\n${methodsStr}\n}`;
         }
 
         // Generate a block body where member names are prefixed with 'this.'
